@@ -90,65 +90,6 @@ def bootstrap(only_check_for_zips=False):
     zip_vendor_lib(vendor_lib)
   logging.info('Finishing bootstrap.')
 
-def monkey_patch_skipped_files():
-  logging.info('Monkey patching dev_appserver...')
-  from google.appengine.tools import dev_appserver as da
-
-  def _patch(logical_filename, normcase=os.path.normcase):
-    """Determines if a file's path is accessible.
-
-    This is an internal part of the IsFileAccessible implementation.
-
-    Args:
-      logical_filename: Absolute path of the file to check.
-      normcase: Used for dependency injection.
-
-    Returns:
-      True if the file is accessible, False otherwise.
-    """
-    logical_dirfakefile = logical_filename
-    if os.path.isdir(logical_filename):
-      logical_dirfakefile = os.path.join(logical_filename, 'foo')
-
-    if da.IsPathInSubdirectories(logical_dirfakefile, [da.FakeFile._root_path],
-                                 normcase=normcase):
-      relative_filename = logical_dirfakefile[len(da.FakeFile._root_path):]
-
-      #if (not FakeFile._allow_skipped_files and
-      #    FakeFile._skip_files.match(relative_filename)):
-      #  logging.warning('Blocking access to skipped file "%s"',
-      #                  logical_filename)
-      #  return False
-
-      if da.FakeFile._static_file_config_matcher.IsStaticFile(relative_filename):
-        logging.warning('Blocking access to static file "%s"',
-                        logical_filename)
-        return False
-
-    if logical_filename in da.FakeFile.ALLOWED_FILES:
-      return True
-
-    if logical_filename in da.FakeFile.ALLOWED_SITE_PACKAGE_FILES:
-      return True
-
-    if da.IsPathInSubdirectories(logical_dirfakefile,
-                                 da.FakeFile.ALLOWED_SITE_PACKAGE_DIRS,
-                                 normcase=normcase):
-      return True
-
-    allowed_dirs = da.FakeFile._application_paths | da.FakeFile.ALLOWED_DIRS
-    if (da.IsPathInSubdirectories(logical_dirfakefile,
-                                  allowed_dirs,
-                                  normcase=normcase) and
-        not da.IsPathInSubdirectories(logical_dirfakefile,
-                                      da.FakeFile.NOT_ALLOWED_DIRS,
-                                      normcase=normcase)):
-      return True
-
-    return False
-
-  da.FakeFile._IsFileAccessibleNoCache = staticmethod(_patch)
-
 def generate_api_docs():
   logging.info('Generating api docs...')
   from epydoc import docparser

@@ -32,9 +32,6 @@ for x in os.listdir('.'):
 
 from appengine_django import InstallAppengineHelperForDjango
 
-# TODO(termie): remove this when no longer needed
-build.monkey_patch_skipped_files()
-
 InstallAppengineHelperForDjango()
 
 from common import component
