@@ -550,8 +550,10 @@ $(document).ready(function() {
 
     // Bubbles
     var sb = $("div#sidebar");
-    if (sb.length)
+    if (sb.length) {
       sb.find("div#contacts>ul>li").bubble(0, -18);
+      sb.find("div#channels>ul>li").bubble(0, -18);
+    }
 
     // Delete confirmation links
     $("a.confirm-delete").confirm();

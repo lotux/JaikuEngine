@@ -1576,54 +1576,6 @@ div#sidebar div.contacts ul li {
     margin: 2px;
 }
 
-div#sidebar div#channels ul {
-    list-style-type: none;
-    overflow: hidden;
-    margin: 0 8px;
-}
-
-div#sidebar div#channels ul li {
-    clear: left;
-    margin: 0;
-}
-
-div#sidebar div#channels ul li img.photo {
-    padding: 4px;
-    float: left;
-}
-
-#frontpage div#sidebar div#channels ul li {
-    border-bottom: none;
-    clear: none;
-    float: left;
-    width: 64px;
-}
-
-div#sidebar div#channels ul li img.photo {
-    border: solid 1px #fff;
-    padding: 2px;
-}
-
-#frontpage div#sidebar div#channels ul li img.photo {
-    border: solid 1px #e5e5e5;
-    padding: 4px;
-    margin: 2px;
-}
-
-div#sidebar div#channels ul li {
-    border-bottom: solid 1px #f1f1f1;
-    overflow: hidden;
-    padding: 0.2em 0;
-}
-
-div#sidebar div#channels ul li h3 {
-    margin-bottom: 0;
-}
-
-div#sidebar div#channels ul li h3, div#sidebar div#channels ul li p {
-    margin-left: 45px;
-}
-
 div#sidebar div.contacts ul li div.bubble {
     display: none;
 }
