@@ -66,6 +66,7 @@ ACCESS_LEVELS = [NO_ACCESS,
 ROOT = Actor(nick=settings.ROOT_NICK, type='user')
 ROOT.access_level = ADMIN_ACCESS
 
+
 # Max length of a message. Conciseness is a virtue.
 # UIs should prevent posting longer messages. API will truncate
 # posts longer than this.
