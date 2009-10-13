@@ -533,15 +533,15 @@ def activation_activate_email(api_user, nick, code):
   return relation_ref
 
 @owner_required
-def activation_activate_mobile(api_user, nick, code):
-  activation_ref = activation_get_code(api_user, nick, 'mobile', code)
-  if not activation_ref:
-    raise exception.ApiException('Invalid code: %s' % code)
+  def activation_activate_mobile(api_user, nick, code):
+    activation_ref = activation_get_code(api_user, nick, 'mobile', code)
+    if not activation_ref:
+      raise exception.ApiException('Invalid code: %s' % code)
 
-  existing_ref = actor_lookup_mobile(ROOT, activation_ref.content)
-  if existing_ref:
-    raise exception.ApiException(
-        'Mobile number %s has already been activated' % activation_ref.content)
+    existing_ref = actor_lookup_mobile(ROOT, activation_ref.content)
+    if existing_ref:
+      raise exception.ApiException(
+          'Mobile number %s has already been activated' % activation_ref.content)
 
     # XXX begin transaction
     actor_ref = actor_get(api_user, nick)
