@@ -16,6 +16,7 @@ import urlparse
 import sys
 
 from beautifulsoup import BeautifulSoup
+import mox
 
 from django import http
 from django import test
@@ -55,6 +56,8 @@ class FixturesTestCase(test.TestCase):
                'root@example.com': 'fakepassword',
                'hotness@example.com': 'fakepassword'};
   
+  __metaclass__ = mox.MoxMetaTestBase
+
   def setUp(self):
     settings.DEBUG = False
 
@@ -70,6 +73,7 @@ class FixturesTestCase(test.TestCase):
       profile.start()
 
     self.client = client.Client(SERVER_NAME=settings.DOMAIN)
+    self.mox = mox.Mox()
 
   def tearDown(self):
     if profile.PROFILE_ALL_TESTS:
@@ -78,6 +82,9 @@ class FixturesTestCase(test.TestCase):
     if hasattr(self, 'override'):
       self.override.reset()
       del self.override
+
+    self.mox.UnsetStubs()
+    
 
   def exhaust_queue(self, nick):
     test_util.exhaust_queue(nick)

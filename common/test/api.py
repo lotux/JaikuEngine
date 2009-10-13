@@ -17,6 +17,7 @@ import datetime
 import logging
 import simplejson
 from oauth import oauth
+import mox
 
 from django.conf import settings
 from django.core import mail
@@ -222,6 +223,14 @@ class ApiUnitTest(base.FixturesTestCase):
   annoying_nick = 'annoying@example.com'
   obligated_nick = 'obligated@example.com'
   root_nick = 'root@example.com'
+  deleted_nick = 'deleted@example.com'
+
+  public_entry_key = 'stream/popular@example.com/presence/12345'
+  private_entry_key = 'stream/girlfriend@example.com/presence/16961'
+  channel_entry_key = 'stream/#popular@example.com/presence/13345'
+  deleted_entry_key = 'stream/popular@example.com/presence/12348'
+  deleted_user_entry_key = 'stream/deleted@example.com/presence/10347'
+  deleted_stream_entry_key = 'stream/popular@example.com/presence-deleted/17346'
 
   def setUp(self):
     super(ApiUnitTest, self).setUp()
@@ -234,30 +243,57 @@ class ApiUnitTest(base.FixturesTestCase):
     super(ApiUnitTest, self).tearDown()
     models.CachingModel.enable_cache(False)
 
-  def _exercise_permissions(self, f, expected, *args, **kw):
-    """helper to run through the 4 permissions on a target"""
+  def assertPermissions(self, access_level, func, *args, **kw):
+    for current_level in api.ACCESS_LEVELS:
+      self._pre_setup()
+      self.setUp()
 
-    for k, v in expected.iteritems():
-      self._pre_setup() # Reinit the datastore
-      self.setUp() # Standard setup
+      # stub out actor_owns_actor so that we don't get owner_required errors
+      self.mox.stubs.Set(api, 'actor_owns_actor', lambda *args: True)
+
+      should_fail = (api.ACCESS_LEVELS.index(access_level) > 
+                     api.ACCESS_LEVELS.index(current_level))
+
       threw = False
       try:
-        temp_actor = models.Actor(nick='root@example.com')
-        temp_actor.access_level = k
-        f(temp_actor, *args, **kw)
-      except exception.ApiException, e:
+        temp_actor = models.Actor(nick='temp', type='user')
+        temp_actor.access_level = current_level
+        new_args = (temp_actor,) + args
+        func(*new_args, **kw)
+        if should_fail:
+          self.fail('Unexpected permission success, expected: %s, actual: %s'
+                    % (access_level, current_level))
+      except exception.ApiPermissionDenied, e:
         threw = True
-        perm_error = (e.code == exception.PERMISSION_ERROR)
-        matched = (v != perm_error)
-        self.assert_(matched, "Permissions %s, %s" % (k, v))
+        if not should_fail:
+          self.fail('Unexpected permission fail, expected: %s, actual: %s'
+                    % (access_level, current_level))
       except:
         # No 'finally' in 2.4
         self.tearDown()
         raise
-      # no 'else' in 2.4
-      if not threw:
-        self.assert_(v, "Permissions %s, %s" % (k, v))
+
       self.tearDown()
+
+    self._pre_setup()
+    self.setUp()
+  
+  # a bunch of basic permissions tests
+  def assertAdminRequired(self, func, *args, **kw):
+    self.assertPermissions(api.ADMIN_ACCESS, func, *args, **kw)
+  
+  def assertDeleteRequired(self, func, *args, **kw):
+    self.assertPermissions(api.DELETE_ACCESS, func, *args, **kw)
+
+  def assertWriteRequired(self, func, *args, **kw):
+    self.assertPermissions(api.WRITE_ACCESS, func, *args, **kw)
+
+  def assertReadRequired(self, func, *args, **kw):
+    self.assertPermissions(api.READ_ACCESS, func, *args, **kw)
+
+  def assertNoAccessRequired(self, func, *args, **kw):
+    self.assertPermissions(api.NO_ACCESS, func, *args, **kw)
+
 
 class ApiUnitTestBasic(ApiUnitTest):
   def test_actor_get(self):
@@ -270,6 +306,9 @@ class ApiUnitTestBasic(ApiUnitTest):
     self.assertEqual(root_private.nick, self.celebrity_nick)
 
     # contact public case
+    self.assertNoAccessRequired(api.actor_has_contact,
+                                self.popular_nick,
+                                self.celebrity_nick)
     contact_public = api.actor_get(self.popular, self.popular_nick)
     self.assertEqual(contact_public.nick, self.popular_nick)
 
@@ -282,12 +321,7 @@ class ApiUnitTestBasic(ApiUnitTest):
     self.assertEqual(test_public.nick, self.popular_nick)
 
     # test perms
-    self._exercise_permissions(api.actor_get,
-                               {'read': True,
-                                'write': True,
-                                'delete': True,
-                                'admin': True},
-                               self.popular_nick)
+    self.assertNoAccessRequired(api.actor_get, self.popular_nick)
 
   def test_actor_get_actors(self):
     popular_nicks = [self.popular_nick, self.unpopular_nick]
@@ -325,12 +359,7 @@ class ApiUnitTestBasic(ApiUnitTest):
     self.assertEqual(len(test_public), 2)
 
     # test perms
-    self._exercise_permissions(api.actor_get_actors,
-                               {'read': True,
-                                'write': True,
-                                'delete': True,
-                                'admin': True},
-                               [self.popular_nick])
+    self.assertNoAccessRequired(api.actor_get_actors, [self.popular_nick])
 
   def test_actor_has_contact(self):
     # root public case
@@ -347,13 +376,9 @@ class ApiUnitTestBasic(ApiUnitTest):
     self.assert_(not root_notcontact)
 
     # test perms
-    self._exercise_permissions(api.actor_has_contact,
-                               {'read': True,
-                                'write': True,
-                                'delete': True,
-                                'admin': True},
-                               self.popular_nick,
-                               self.celebrity_nick)
+    self.assertNoAccessRequired(api.actor_has_contact,
+                                self.popular_nick,
+                                self.celebrity_nick)
 
   def test_actor_add_contact(self):
     # Make sure it works between local users though
@@ -406,13 +431,9 @@ class ApiUnitTestBasic(ApiUnitTest):
 
 
     # Make sure it requires write permissions
-    self._exercise_permissions(api.actor_add_contact,
-                               {'read': False,
-                                'write': True,
-                                'delete': True,
-                                'admin': True},
-                               self.popular_nick,
-                               self.unpopular_nick)
+    self.assertWriteRequired(api.actor_add_contact,
+                             self.popular_nick,
+                             self.unpopular_nick)
 
     # Make sure we can't modify other people
     def _modify_other():
@@ -431,11 +452,7 @@ class ApiUnitTestBasic(ApiUnitTest):
     self.assertRaises(exception.ApiException, _not_a_contact)
 
     # test perms
-    self._exercise_permissions(api.actor_remove_contact,
-                               {'read': False,
-                                'write': False,
-                                'delete': True,
-                                'admin': True},
+    self.assertDeleteRequired(api.actor_remove_contact,
                                self.unpopular_nick,
                                self.popular_nick)
 
@@ -1365,6 +1382,7 @@ class ApiUnitTestPost(ApiUnitTest):
 class ApiUnitTestSpam(ApiUnitTest):
 
   def setUp(self):
+    super(ApiUnitTestSpam, self).setUp()
     self.popular_ref = api.actor_get(api.ROOT, self.popular_nick)
     self.unpopular_ref = api.actor_get(api.ROOT, self.unpopular_nick)
     self.celebrity_ref = api.actor_get(api.ROOT, self.celebrity_nick)
