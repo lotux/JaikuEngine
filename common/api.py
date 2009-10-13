@@ -542,14 +542,14 @@ def activation_activate_mobile(api_user, nick, code):
     raise exception.ApiException(
         'Mobile number %s has already been activated' % activation_ref.content)
 
-    # XXX begin transaction
-    actor_ref = actor_get(api_user, nick)
+  # XXX begin transaction
+  actor_ref = actor_get(api_user, nick)
 
-    relation_ref = mobile_associate(ROOT, actor_ref.nick, activation_ref.content)
-    activation_ref.delete()
+  relation_ref = mobile_associate(ROOT, actor_ref.nick, activation_ref.content)
+  activation_ref.delete()
 
-    # XXX end transaction
-    return relation_ref
+  # XXX end transaction
+  return relation_ref
 
 @admin_required
 def activation_create(api_user, nick, type, content):
