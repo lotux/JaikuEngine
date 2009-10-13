@@ -305,9 +305,8 @@ def access_required(access_level):
   def _decorator(f):
     def _wrap(api_user, *args, **kw):
       if not has_access(api_user, access_level):
-        raise exception.ApiException(
-            exception.PERMISSION_ERROR,
-            'You need %s access or above to use this method' % access_level)
+        raise exception.ApiPermissionDenied(
+            'You need %s access or better to use this method' % access_level)
       return f(api_user, *args, **kw)
     _wrap.func_name = f.func_name
     _wrap.meta = append_meta(f, '%s_required' % access_level)
@@ -329,10 +328,9 @@ def owner_required(f):
     actor_ref = _actor_from_args_kw(['nick', 'owner', 'channel'], args, kw)
 
     if not actor_owns_actor(api_user, actor_ref):
-      # TODO(termie): pretty obtuse message...
-      raise exception.ApiException(exception.PRIVACY_ERROR,
-                                   'Operation not allowed')
-
+      raise exception.ApiOwnerRequired(
+          'Operation not allowed: %s does not own %s' 
+          % (api_user and api_user.nick or '(nobody)', actor_ref.nick))                                           
     # everything checks out, call the original function
     return f(api_user, *args, **kw)
 
@@ -351,12 +349,13 @@ def owner_required_by_target(f):
 
     actor_ref = actor_get_safe(ROOT, nick)
     if not actor_ref:
-      raise exception.ApiException(0x00, 'Actor does not exist: %s' % nick)
+      raise exception.ApiNotFound('Actor does not exist: %s' % nick)
+
 
     if not actor_owns_actor(api_user, actor_ref):
-      # TODO(termie): pretty obtuse message...
-      raise exception.ApiException(exception.PRIVACY_ERROR,
-                                   'Operation not allowed')
+      raise exception.ApiOwnerRequired(
+          'Operation not allowed: %s does not own %s' 
+          % (api_user and api_user.nick or '(nobody)', actor_ref.nick))
 
     # everything checks out, call the original function
     return f(api_user, *args, **kw)
@@ -370,9 +369,9 @@ def owner_required_by_entry(f):
     entry_ref = _entry_from_args_kw(['entry', 'comment'], args, kw)
 
     if not actor_owns_entry(api_user, entry_ref):
-      # TODO(termie): pretty obtuse message...
-      raise exception.ApiException(exception.PRIVACY_ERROR,
-                                   'Operation not allowed')
+      raise exception.ApiOwnerRequired(
+          'Operation not allowed: %s does not own %s' 
+          % (api_user.nick, entry_ref.keyname()))
 
     # everything checks out, call the original function
     return f(api_user, *args, **kw)
@@ -381,7 +380,6 @@ def owner_required_by_entry(f):
   _wrap.meta = append_meta(f, 'owner_required_by_entry')
   return _wrap
 
-# TODO(termie): this could probably have a better name
 def viewable_required(f):
   """ assert that the calling user is allowed to view this """
   def _wrap(api_user, *args, **kw):
@@ -389,9 +387,9 @@ def viewable_required(f):
       actor_ref = _actor_from_args_kw(['channel', 'nick', 'owner'], args, kw)
       
       if not actor_can_view_actor(api_user, actor_ref):
-        # TODO(termie): pretty obtuse message...
-        raise exception.ApiException(exception.PRIVACY_ERROR,
-                                     'Operation not allowed')
+        raise exception.ApiViewableRequired(
+            'Operation not allowed: %s can not see %s' 
+            % (api_user and api_user.nick or '(nobody)', actor_ref.nick))
 
     # everything checks out, call the original function
     return f(api_user, *args, **kw)
@@ -405,9 +403,9 @@ def viewable_required_by_entry(f):
     if not has_access(api_user, ADMIN_ACCESS):
       entry_ref = _entry_from_args_kw(['entry', 'comment'], args, kw)
       if not actor_can_view_entry(api_user, entry_ref):
-        # TODO(termie): pretty obtuse message...
-        raise exception.ApiException(exception.PRIVACY_ERROR,
-                                     'Operation not allowed')
+        raise exception.ApiViewableRequired(
+            'Operation not allowed: %s can not see %s' 
+            % (api_user and api_user.nick or '(nobody)', entry_ref.keyname()))
 
     # everything checks out, call the original function
     return f(api_user, *args, **kw)
@@ -421,9 +419,9 @@ def viewable_required_by_stream(f):
     if not has_access(api_user, ADMIN_ACCESS):
       stream_ref = _stream_from_args_kw(['stream'], args, kw)
       if not actor_can_view_stream(api_user, stream_ref):
-        # TODO(termie): pretty obtuse message...
-        raise exception.ApiException(exception.PRIVACY_ERROR,
-                                     'Operation not allowed')
+        raise exception.ApiViewableRequired(
+            'Operation not allowed: %s can not see %s' 
+            % (api_user and api_user.nick or '(nobody)', stream_ref.keyname()))
 
     # everything checks out, call the original function
     return f(api_user, *args, **kw)
@@ -517,12 +515,12 @@ def abuse_report_entry(api_user, nick, entry):
 def activation_activate_email(api_user, nick, code):
   activation_ref = activation_get_code(api_user, nick, 'email', code)
   if not activation_ref:
-    raise exception.ApiException(0x00, 'Invalid code')
+    raise exception.ApiException('Invalid code: %s' % code)
 
   existing_ref = actor_lookup_email(ROOT, activation_ref.content)
   if existing_ref:
     raise exception.ApiException(
-        0x00, 'That email address has already been activated')
+        'Email address %s has already been activated' % activation_ref.content)
 
   # XXX begin transaction
   actor_ref = actor_get(api_user, nick)
@@ -537,12 +535,12 @@ def activation_activate_email(api_user, nick, code):
 def activation_activate_mobile(api_user, nick, code):
   activation_ref = activation_get_code(api_user, nick, 'mobile', code)
   if not activation_ref:
-    raise exception.ApiException(0x00, 'Invalid code')
+    raise exception.ApiException('Invalid code: %s' % code)
 
   existing_ref = actor_lookup_mobile(ROOT, activation_ref.content)
   if existing_ref:
     raise exception.ApiException(
-        0x00, 'That mobile number has already been activated')
+        'Mobile number %s has already been activated' % activation_ref.content)
 
   # XXX begin transaction
   actor_ref = actor_get(api_user, nick)
@@ -575,7 +573,7 @@ def activation_create_mobile(api_user, nick, mobile):
   clean.mobile(mobile)
 
   if actor_lookup_mobile(api_user, mobile):
-    raise exception.ApiException(0x00, 'Mobile number already in use')
+    raise exception.ApiException('Mobile number already in use')
 
   return activation_create(api_user, nick, 'mobile', mobile)
 
@@ -640,7 +638,7 @@ def activation_request_email(api_user, nick, email):
   # can request an activation for an email that already exists
   existing_ref = actor_lookup_email(ROOT, email)
   if existing_ref:
-    raise exception.ApiException(0, "That email address is already in use")
+    raise exception.ApiException("That email address is already in use")
 
   # check whether they've already tried to activate this email
   # if they have send them the same code
@@ -668,7 +666,7 @@ def activation_request_mobile(api_user, nick, mobile):
   # can request an activation for an email that already exists
   existing_ref = actor_lookup_mobile(ROOT, mobile)
   if existing_ref:
-    raise exception.ApiException(0, "That mobile number is already in use")
+    raise exception.ApiException("That mobile number is already in use")
 
   # check whether they've already tried to activate this email
   # if they have send them the same code
@@ -730,10 +728,10 @@ def actor_add_contact(api_user, owner, target):
   target_ref = actor_get(api_user, target)
 
   if not owner_ref:
-    raise exception.ApiException(0, 'Actor does not exist: %s' % owner)
+    raise exception.ApiException('Actor does not exist: %s' % owner)
 
   if not target_ref:
-    raise exception.ApiException(0, 'Actor does not exist: %s' % target)
+    raise exception.ApiException('Actor does not exist: %s' % target)
 
   existing_rel_ref = actor_has_contact(ROOT, owner, target)
 
@@ -903,7 +901,7 @@ def actor_get(api_user, nick):
   """
   nick = clean.nick(nick)
   if not nick:
-    raise exception.ApiException(0x00, "Invalid nick")
+    raise exception.ApiException("Invalid nick: %s" % nick)
 
   not_found_message = 'Actor not found: %s' % nick
 
@@ -1140,7 +1138,7 @@ def actor_remove_contact(api_user, owner, target):
 
   if not rel:
     raise exception.ApiException(
-        0, 'Cannot remove a relationship that does not exist')
+        'Cannot remove a relationship that does not exist')
 
   rel.delete()
 
@@ -1347,11 +1345,11 @@ def channel_create(api_user, **kw):
   creator_ref = actor_get(api_user, creator_nick)
 
   if creator_ref.is_channel():
-    raise exception.ApiException(0x00, 'Channels cannot create other channels')
+    raise exception.ApiException('Channels cannot create other channels')
 
   if not actor_owns_actor(api_user, creator_ref):
     raise exception.ApiException(
-        0x00, "Not allowed to act on behalf of this user")
+        "Not allowed to act on behalf of this user")
 
   try:
     existing_ref = channel_get(ROOT, channel_nick)
@@ -1362,12 +1360,12 @@ def channel_create(api_user, **kw):
 
   if existing_ref:
     raise exception.ApiException(
-        0x00, 'Name of the channel is already in use: %s' % channel_nick)
+        'Name of the channel is already in use: %s' % channel_nick)
 
   admin_channels = actor_get_channels_admin(api_user, creator_ref.nick)
   if len(admin_channels) >= MAX_ADMINS_PER_ACTOR:
     raise exception.ApiException(
-        0x00, 'Only allowed to admin %d channels' % MAX_ADMINS_PER_ACTOR)
+        'Only allowed to admin %d channels' % MAX_ADMINS_PER_ACTOR)
 
 
   # also create a list of administrators and members
@@ -1511,7 +1509,7 @@ def channel_join(api_user, nick, channel):
   actor_ref = actor_get(api_user, nick)
 
   if channel_has_member(api_user, channel_ref.nick, actor_ref.nick):
-    raise exception.ApiException(0x00, "already a member")
+    raise exception.ApiException("already a member")
 
   # XXX start transaction
   relation = 'channelmember'
@@ -1546,7 +1544,7 @@ def channel_part(api_user, nick, channel):
   actor_ref = actor_get(api_user, nick)
 
   if not channel_has_member(api_user, channel_ref.nick, actor_ref.nick):
-    raise exception.ApiException(0x00, "not a member")
+    raise exception.ApiException("not a member")
   
   key_name = Relation.key_from(relation='channelmember',
                                owner=channel_ref.nick,
@@ -1659,7 +1657,7 @@ def email_associate(api_user, nick, email):
 
   # XXX start transaction
   if actor_lookup_email(api_user, email):
-    raise exception.ApiException(0x00, 'Email alias already in use')
+    raise exception.ApiException('Email alias already in use')
 
   # clear old email addresses
   # TODO(termie): support multiple email addresses
@@ -1764,7 +1762,7 @@ def entry_add_comment(api_user, _task_ref=None, **kw):
     validate.entry(entry)
     validate.uuid(uuid)
   except exception.ValidationError, e:
-    raise exception.ApiException(0x00, e.user_message)
+    raise exception.ApiException(e.user_message)
 
   if settings.QUEUE_ENABLED:
     task_ref = _task_ref
@@ -1831,7 +1829,6 @@ def entry_add_comment_with_entry_uuid(api_user, **kw):
   entry_ref = entry_get_uuid(api_user, entry_uuid)
   if not entry_ref:
     raise exception.ApiException(
-        0x00,
         'No entry with uuid %s' % entry_uuid)
   kw['stream'] = entry_ref.stream
   kw['entry'] = entry_ref.keyname()
@@ -2014,8 +2011,9 @@ def entry_get_uuid(api_user, uuid):
   if not entry_ref:
     return None
   if not actor_can_view_entry(api_user, entry_ref):
-    raise exception.ApiException(exception.PRIVACY_ERROR,
-                                 'You are not allowed to view this entry')
+    raise exception.ApiViewableRequired(
+        'Operation not allowed: %s cannot see entry with uuid %s'
+        % (api_user.nick, uuid))
   return entry_get(api_user, entry_ref.key().name())
 
 def entry_get_safe(api_user, entry):
@@ -2039,9 +2037,9 @@ def entry_mark_as_spam(api_user, entry):
 def entry_remove(api_user, entry):
   entry_ref = StreamEntry.get_by_key_name(entry)
   if not entry_ref:
-    raise exception.ApiException(0x00, "Invalid post, not found")
+    raise exception.ApiException("Invalid post, not found")
   if entry_ref.entry:
-    raise exception.ApiException(0x00, "Cannot call entry_remove on a comment")
+    raise exception.ApiException("Cannot call entry_remove on a comment")
   entry_ref.mark_as_deleted()
 
 @delete_required
@@ -2050,10 +2048,9 @@ def entry_remove_comment(api_user, comment):
   # XXX start transaction
   comment_ref = StreamEntry.get_by_key_name(comment)
   if not comment_ref:
-    raise exception.ApiException(0x00, "Invalid comment, not found")
+    raise exception.ApiException("Invalid comment, not found")
   if not comment_ref.entry:
     raise exception.ApiException(
-        0x00,
         "Cannot call entry_remove_comment on something that is not a comment")
   entry_ref = entry_get(api_user, comment_ref.entry)
   entry_ref.extra.setdefault('comment_count', 0)
@@ -2284,7 +2281,7 @@ def invite_get(api_user, code):
   key_name = Invite.key_from(code=code)
   invite_ref = Invite.get_by_key_name(key_name)
   if not invite_ref:
-    raise exception.ApiException(0x00, "Invalid invite code")
+    raise exception.ApiException("Invalid invite code")
   return invite_ref
 
 @owner_required
@@ -2344,10 +2341,10 @@ def login_forgot(api_user, nick_or_email):
       activations = activation_get_by_email(ROOT, nick_or_email)
       if not activations:
         raise exception.ApiException(
-            0x00, 'Email does not match any accounts')
+            'Email does not match any accounts')
       if len(activations) != 1:
         raise exception.ApiException(
-            0x00, 'Email matches more than one account')
+            'Email matches more than one account')
       actor_ref = actor_get(ROOT, activations[0].actor)
   else: 
     actor_ref = actor_lookup_nick(ROOT, nick_or_email)
@@ -2363,10 +2360,10 @@ def login_forgot(api_user, nick_or_email):
     
     if not activation_refs:
       raise exception.ApiException(
-          0x00, 'This user does not have an email address!')
+          'This user does not have an email address!')
     elif len(activation_refs) != 1:
       raise exception.ApiException(
-          0x00, 'This email address maps to multiple users!')
+          'This email address maps to multiple users!')
     
     # At this point, we have an unconfirmed email address which maps to exactly
     # one user.
@@ -2391,25 +2388,25 @@ def login_reset(api_user, email, hash):
     activations = activation_get_by_email(ROOT, email)
     if not activations:
       raise exception.ApiException(
-          0x00, 'Email does not match any accounts')
+          'Email does not match any accounts')
     if len(activations) != 1:
       raise exception.ApiException(
-          0x00, 'Email matches more than one account')
+          'Email matches more than one account')
     actor_ref = actor_get(ROOT, activations[0].actor)
 
   if not actor_ref:
     raise exception.ApiException(
-        0x00, 'This email alias doesn\'t match a user.')
+        'This email alias doesn\'t match a user.')
 
   activation_ref = activation_get(ROOT, actor_ref.nick, 'password_lost', email)
 
   # The user didn't lose their password
   if not activation_ref:
-    raise exception.ApiException(0x00, 'Invalid request')
+    raise exception.ApiException('Invalid request')
   
   # The hash doesn't match
   if util.hash_generic(activation_ref.code) != hash:
-    raise exception.ApiException(0x00, 'Invalid request, hash does not match')
+    raise exception.ApiException('Invalid request, hash does not match')
 
   # Generate a new password
   password = util.generate_password()
@@ -2432,7 +2429,7 @@ def mobile_associate(api_user, nick, mobile):
 
   # XXX start transaction
   if actor_lookup_mobile(api_user, mobile):
-    raise exception.ApiException(0x00, 'Mobile number already in use')
+    raise exception.ApiException('Mobile number already in use')
 
   # clear old mobile numbers
   # TODO(termie): support multiple mobile numners
@@ -2597,11 +2594,11 @@ def oauth_revoke_access_token(api_user, key):
   token_ref = oauth_get_access_token(ROOT, key)
 
   if not token_ref:
-    raise exception.ApiException(0x00, "Token does not exist")
+    raise exception.ApiException("Token does not exist")
 
   # Verify that this token belongs to the specified user.
   if token_ref.actor != api_user.nick:
-    raise exception.ApiException(0x00, "Token does not belong to actor")
+    raise exception.ApiException("Token does not belong to actor")
 
   token_ref.delete()
 
@@ -2634,8 +2631,9 @@ def oauth_get_consumer(api_user, key):
 
   actor_ref = actor_get(ROOT, key_ref.actor)
   if not actor_owns_actor(api_user, actor_ref):
-    raise exception.ApiException(exception.PRIVACY_ERROR,
-                                 'Only allowed to view your own API keys')
+    raise exception.ApiViewableRequired(
+        'Operation not allowed: %s does not own %s' 
+        % (api_user.nick, actor_ref.nick))
   return key_ref
 
 @admin_required
@@ -2701,7 +2699,7 @@ def post(api_user, _task_ref=None, **kw):
     validate.location(location)
     validate.uuid(uuid)
   except exception.ValidationError, e:
-    raise exception.ApiException(0x00, e.user_message)
+    raise exception.ApiException(e.user_message)
 
   if generated:
     # TODO(termie): update the presence, yo
@@ -3237,7 +3235,7 @@ def stream_get_comment(api_user, nick):
   key_name = Stream.key_from(owner=nick, slug='comments')
   comment_stream = Stream.get_by_key_name(key_name)
   if not comment_stream:
-    raise exception.ApiException(0x00, 'Stream not found')
+    raise exception.ApiNotFound('Stream not found')
   return comment_stream
 
 def stream_get_actor_safe(api_user, nick):
@@ -3257,7 +3255,7 @@ def stream_get_presence(api_user, nick):
   key_name = Stream.key_from(owner=nick, slug='presence')
   presence_stream = Stream.get_by_key_name(key_name)
   if not presence_stream:
-    raise exception.ApiException(0x00, 'Stream not found')
+    raise exception.ApiNotFound('Stream not found')
   return presence_stream
 
 # depends on stream_get's privacy
@@ -3349,7 +3347,7 @@ def subscription_request(api_user, topic, target):
   topic_nick = util.get_user_from_topic(topic)
 
   if topic_nick is None:
-    raise exception.ApiException(0, 'Subscription topic must include username')
+    raise exception.ApiException('Subscription topic must include username')
 
   target_ref = actor_get(api_user, target_nick)
   topic_ref = actor_get(api_user, topic_nick)
@@ -3886,7 +3884,7 @@ def _add_entry(new_stream_ref, new_values, entry_ref=None):
 
   if entry_get_uuid(ROOT, new_values['uuid']):
     raise exception.ApiException(
-        0x00, "Duplicate entry, uuid %s already used" % new_values['uuid'])
+        "Duplicate entry, uuid %s already used" % new_values['uuid'])
     
   # Now the key is uuid and this check duplicates the above, but we will change
   # the key to use the slug later.
@@ -3898,7 +3896,7 @@ def _add_entry(new_stream_ref, new_values, entry_ref=None):
     existing = False
 
   if existing:
-    raise exception.ApiException(0x00, "Duplicate entry, key %s already used" %
+    raise exception.ApiException("Duplicate entry, key %s already used" %
                                  key_name)
 
   new_entry_ref = StreamEntry(**new_values)

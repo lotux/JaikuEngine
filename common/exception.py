@@ -60,12 +60,11 @@ def handle_image_error(f, *args, **kw):
   try:
     return f(*args, **kw)
   except images.LargeImageError:
-    raise ApiException(0x00, "Uploaded image size is too large")
+    raise ApiException('Uploaded image size is too large')
   except images.NotImageError:
-    raise ApiException(0x00,
-        "Uploaded image is not in a recognized image format")
+    raise ApiException('Uploaded image is not in a recognized image format')
   except images.Error:
-    raise ApiException(0x00, "Unable to process uploaded image")
+    raise ApiException('Unable to process uploaded image')
 
 def catch_api(*args):
   """catch an api exception of a specific type, re-raises if not matched"""
@@ -251,9 +250,11 @@ class ApiException(UserVisibleError):
   message = None
   code = 0x00
 
-  def __init__(self, code, message):
-    self.code = code
-    self.message = message
+  def __init__(self, message=None, code=None):
+    if code is not None:
+      self.code = code
+    if message is not None:
+      self.message = message
 
   def to_dict(self):
     return dict(code=self.code, message=self.message)
@@ -269,8 +270,6 @@ class ApiException(UserVisibleError):
 
 class ApiNotFound(ApiException):
   code = NOT_FOUND
-  def __init__(self, message):
-    self.message = message
 
 class ApiDeleted(ApiNotFound):
   pass
@@ -278,13 +277,29 @@ class ApiDeleted(ApiNotFound):
 class ApiLocked(ApiException):
   code = LOCKED
 
-  def __init__(self, message):
-    self.message = message
-
 class ApiNoTasks(ApiNotFound):
   pass
 
 class ApiThrottled(ApiException):
   code = THROTTLED
-  def __init__(self, message):
-    self.message = message
+
+class ApiPermissionDenied(ApiException):
+  code = PERMISSION_ERROR
+
+class ApiOwnerRequired(ApiException):
+  code = PRIVACY_ERROR
+
+class ApiViewableRequired(ApiException):
+  code = PRIVACY_ERROR
+
+class ApiNoMethod(ApiException):
+  code = NO_METHOD
+
+class ApiInvalidMethod(ApiException):
+  code = INVALID_METHOD
+
+class ApiInvalidArguments(ApiException):
+  code = INVALID_ARGUMENTS
+
+class ApiOAuth(ApiException):
+  code = OAUTH_ERROR

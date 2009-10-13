@@ -271,7 +271,7 @@ def api_call(request, format="json"):
       method = 'post'
 
     if not method:
-      raise exception.ApiException(exception.NO_METHOD, "No method specified")
+      raise exception.ApiNoMethod('No method specified')
 
 
     # Allows us to turn off authentication for testing purposes
@@ -282,26 +282,25 @@ def api_call(request, format="json"):
 
     method_ref = api.PublicApi.get_method(method, api_user)
     if not method_ref:
-      raise exception.ApiException(exception.INVALID_METHOD,
-                         'Invalid method: %s' % method)
+      raise exception.ApiInvalidMethod('Invalid method: %s' % method)
 
     if not api_user:
-      raise exception.ApiException(0x00, 'Invalid API user')
+      raise exception.ApiException('Invalid API user')
 
     if getattr(api_user, 'legacy', None) and method == 'post':
       kwargs['nick'] = api_user.nick
 
     rv = method_ref(api_user, **kwargs)
     if rv is None:
-      raise exception.ApiException(0x00, 'method %s returned None'%(method))
+      raise exception.ApiException('method %s returned None'%(method))
     return render_api_response(rv, format, servertime=servertime)
   except oauth_util.OAuthError, e:
-    exc = exception.ApiException(exception.OAUTH_ERROR, e.message)
+    exc = exception.ApiOAuth(e.message)
     return render_api_response(exc, format)
   except exception.ApiException, e:
     return render_api_response(e, format)
   except TypeError, e:
-    exc = exception.ApiException(exception.INVALID_ARGUMENTS, str(e))
+    exc = exception.ApiInvalidArguments(str(e))
     return render_api_response(exc, format)
   except:
     exception.handle_exception(request)
@@ -369,7 +368,7 @@ def api_cleardata(request):
 def api_vendor_sms_receive(request, vendor_secret=None):
   """ a one off implementation for receiving sms from IPX """
   if vendor_secret != settings.SMS_VENDOR_SECRET:
-    raise exception.ApiException(0x00, "Invalid secret")
+    raise exception.ApiException("Invalid secret")
 
   sms_message = sms_protocol.SmsMessage.from_request(request)
   sms_service = sms.SmsService(sms_protocol.SmsConnection())
@@ -401,7 +400,7 @@ def api_vendor_queue_process(request):
   """ process a queue item, redirect to self if there were more """
   secret = request.REQUEST.get('secret')
   if secret != settings.QUEUE_VENDOR_SECRET:
-    raise exception.ApiException(0x00, "Invalid secret")
+    raise exception.ApiException("Invalid secret")
   
   try:
     rv = api.task_process_any(api.ROOT)
