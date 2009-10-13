@@ -222,14 +222,6 @@ class ApiUnitTest(base.FixturesTestCase):
   annoying_nick = 'annoying@example.com'
   obligated_nick = 'obligated@example.com'
   root_nick = 'root@example.com'
-  deleted_nick = 'deleted@example.com'
-
-  public_entry_key = 'stream/popular@example.com/presence/12345'
-  private_entry_key = 'stream/girlfriend@example.com/presence/16961'
-  channel_entry_key = 'stream/#popular@example.com/presence/13345'
-  deleted_entry_key = 'stream/popular@example.com/presence/12348'
-  deleted_user_entry_key = 'stream/deleted@example.com/presence/10347'
-  deleted_stream_entry_key = 'stream/popular@example.com/presence-deleted/17346'
 
   def setUp(self):
     super(ApiUnitTest, self).setUp()
@@ -266,10 +258,6 @@ class ApiUnitTest(base.FixturesTestCase):
       if not threw:
         self.assert_(v, "Permissions %s, %s" % (k, v))
       self.tearDown()
-
-
-
-
 
 class ApiUnitTestBasic(ApiUnitTest):
   def test_actor_get(self):
