@@ -294,6 +294,30 @@ class ApiUnitTest(base.FixturesTestCase):
   def assertNoAccessRequired(self, func, *args, **kw):
     self.assertPermissions(api.NO_ACCESS, func, *args, **kw)
 
+class AbuseUnitTest(ApiUnitTest):
+  def test_perms(self):
+    # basic perms
+    self.assertAdminRequired(api.abuse_get_entry, self.public_entry_key)
+    self.assertWriteRequired(api.abuse_report_entry, 
+                             self.popular_nick,
+                             self.public_entry_key)
+
+  def test_basic(self):
+    api.abuse_report_entry(self.hermit, self.hermit_nick, self.public_entry_key)
+    abuse_ref = api.abuse_get_entry(api.ROOT, self.public_entry_key)
+    self.assertEquals(1, abuse_ref.count)
+
+    api.abuse_report_entry(api.ROOT, 
+                           api.ROOT.nick, 
+                           self.public_entry_key)
+    abuse_ref2 = api.abuse_get_entry(api.ROOT, self.public_entry_key)
+    self.assertEquals(2, abuse_ref2.count)
+
+    # don't count additional reports by the same user
+    api.abuse_report_entry(self.hermit, self.hermit_nick, self.public_entry_key)
+    abuse_ref3 = api.abuse_get_entry(api.ROOT, self.public_entry_key)
+    self.assertEquals(2, abuse_ref3.count)
+
 
 class ApiUnitTestBasic(ApiUnitTest):
   def test_actor_get(self):
