@@ -38,7 +38,13 @@ except ImportError:
 
 try:
   import hashlib
-  _hash = lambda k, m: hmac.new(k, m, hashlib.sha1).hexdigest()
+  # NOTE: hmac changed its behavior regarding unicode strings in 2.6,
+  #       even though App Engine is still on 2.5 this is necessary for
+  #       testing with 2.6
+  if sys.version_info[:2] >= (2, 6):
+    _hash = lambda k, m: hmac.new(str(k), m, hashlib.sha1).hexdigest()
+  else:
+    _hash = lambda k, m: hmac.new(k, m, hashlib.sha1).hexdigest()
   sha1 = lambda k: hashlib.sha1(k).hexdigest()
 except ImportError:
   import sha
